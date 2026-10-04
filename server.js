@@ -222,7 +222,7 @@ function delKey(code){if(!confirm('删除卡密 '+code+' ？'))return;api('/api/
 function saveAnn(){var t=document.getElementById('annTitle').value,c=document.getElementById('annContent').value,on=document.getElementById('annOn').checked;api('/api/announcement',{title:t,content:c,on:on}).then(d=>{alert(d.ok?'公告已保存':'失败:'+d.msg);});}
 function saveUI(){var n=document.getElementById('setName').value,p=document.getElementById('setPrimary').value,r=document.getElementById('setRequire').checked;api('/api/settings',{appName:n,primary:p,requireCard:r}).then(d=>{alert(d.ok?'UI设置已保存':'失败:'+d.msg);});}
 function saveVer(){var v=document.getElementById('v').value.trim(),n=document.getElementById('note').value.trim();api('/api/update',{v,n}).then(d=>{alert(d.ok?'已保存':'失败:'+d.msg);load();});}
-function upApk(){var f=document.getElementById('apkFile').files[0];if(!f){alert('请选择APK文件');return;}fetch('/api/upload',{method:'POST',headers:{'x-token':TOK,'x-fname':f.name},body:f}).then(r=>r.json()).then(d=>{alert(d.ok?'上传成功，已设为最新版':'失败:'+d.msg);load();});}
+function upApk(){var f=document.getElementById('apkFile').files[0];if(!f){alert('请选择APK文件');return;}var ver=document.getElementById('v').value.trim();if(!ver){if(!confirm('未填写版本号，将沿用当前版本号，确定继续？'))return;}fetch('/api/upload',{method:'POST',headers:{'x-token':TOK,'x-fname':f.name,'x-ver':ver},body:f}).then(r=>r.json()).then(d=>{alert(d.ok?'上传成功，已设为最新版 v'+(d.v||ver||'-'):'失败:'+d.msg);load();});}
 </script></body></html>`;
 
 /* ===================== HTTP 服务 ===================== */
@@ -309,15 +309,17 @@ const server = http.createServer((req, res) => {
       DATA.version.time = Date.now();
       save(); json(res, { ok: true }); return;
     }
-    /* 上传APK（管理，raw body = APK字节） */
+    /* 上传APK（管理，raw body = APK字节；可带 x-ver 同步新版本号） */
     if (url === '/api/upload') {
       if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
       const name = req.headers['x-fname'] || ('update_' + Date.now() + '.apk');
       const safe = path.basename(String(name));
       fs.writeFileSync(path.join(APK_DIR, safe), buf);
+      const ver = req.headers['x-ver'];
+      if (ver && String(ver).trim()) DATA.version.v = String(ver).trim();
       DATA.version.apkUrl = req.headers.host ? 'http://' + req.headers.host + '/apk/' + safe : '/apk/' + safe;
       DATA.version.time = Date.now();
-      save(); json(res, { ok: true, apkUrl: DATA.version.apkUrl }); return;
+      save(); json(res, { ok: true, apkUrl: DATA.version.apkUrl, v: DATA.version.v }); return;
     }
     /* App 上报：打开/访问 */
     if (url === '/api/report') {
@@ -349,8 +351,14 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    /* 公开配置：设置 + 公告（App 启动拉取） */
-    if (url === '/api/config') { json(res, { ok: true, settings: DATA.settings, announcement: DATA.announcement }); return; }
+    /* 公开配置：设置 + 公告 + 版本（App 启动拉取，用于停用旧版+更新提示） */
+    if (url === '/api/config') {
+      const apkName = fs.existsSync(APK_DIR) && fs.readdirSync(APK_DIR).filter(f => f.endsWith('.apk')).sort().slice(-1)[0];
+      json(res, {
+        ok: true, settings: DATA.settings, announcement: DATA.announcement,
+        version: { v: DATA.version.v || '1.0', note: DATA.version.note || '', apkUrl: apkName ? (req.headers.host ? 'http://' + req.headers.host + '/apk/' + encodeURIComponent(apkName) : '/apk/' + encodeURIComponent(apkName)) : (DATA.version.apkUrl || '') }
+      }); return;
+    }
 
     /* 卡密验证（App）—— 一机一码：每个卡密只能绑定一台设备 */
     if (url === '/api/verify') {
