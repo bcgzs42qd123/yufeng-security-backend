@@ -151,6 +151,10 @@ label.chk input{width:18px;height:18px}
     <input type="text" id="vidTitle" placeholder="视频标题"><input type="text" id="vidUrl" placeholder="视频链接（mp4直链）"><br><br>
     <button onclick="addVideo()">添加视频</button>
   </div>
+  <div class="card"><h2>批量导入链接</h2>
+    <textarea id="vidUrls" rows="4" placeholder="每行一个视频链接（mp4直链）" style="width:100%;box-sizing:border-box"></textarea><br><br>
+    <button onclick="importVideos()">批量导入</button>
+  </div>
   <table id="tVid"><tr><th>标题</th><th>链接</th><th>时间</th><th>操作</th></tr></table>
 </div>
 
@@ -229,7 +233,8 @@ function load(){
 }
 function loadCard(){api('/api/cardkeys/list').then(d=>{if(!d.ok)return;document.getElementById('tCard').innerHTML='<tr><th>卡密</th><th>状态</th><th>绑定设备</th><th>操作</th></tr>'+d.keys.map(x=>'<tr><td class="kcode">'+x.code+'</td><td>'+(x.status==='used'?'<span class="warn">已用</span>':'<span class="okc">未用</span>')+'</td><td style="font-size:12px;color:#666">'+String(x.bindDev||x.usedBy||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</td><td><button class="mini" onclick="delKey('+x.code+')">删除</button></td></tr>').join('')||'<tr><td colspan="4" class="sub">暂无卡密</td></tr>';});}
 function loadVideos(){api('/api/videos').then(d=>{if(!d.ok)return;document.getElementById('tVid').innerHTML='<tr><th>标题</th><th>链接</th><th>时间</th><th>操作</th></tr>'+d.videos.map(x=>'<tr><td>'+String(x.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</td><td style="font-size:12px;color:#666;max-width:220px;word-break:break-all">'+String(x.url||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</td><td style="font-size:12px;color:#666">'+(x.time||'')+'</td><td><button class="mini" onclick="delVideo('+x.id+')">删除</button></td></tr>').join('')||'<tr><td colspan="4" class="sub">暂无视频</td></tr>';});}
-function addVideo(){var t=document.getElementById('vidTitle').value.trim(),u=document.getElementById('vidUrl').value.trim();if(!u){alert('请填写视频链接');return;}api('/api/videos/add',{title:t,url:u}).then(d=>{alert(d.ok?'已添加':'失败:'+d.msg);document.getElementById('vidTitle').value='';document.getElementById('vidUrl').value='';loadVideos();});}
+function addVideo(){var t=document.getElementById('vidTitle').value.trim(),u=document.getElementById('vidUrl').value.trim();if(!u){alert('请填写视频链接');return;}api('/api/videos/add',{title:t,url:u}).then(d=>{alert(d.ok?'已添加 '+d.added+' 条':'失败:'+d.msg);document.getElementById('vidTitle').value='';document.getElementById('vidUrl').value='';loadVideos();});}
+function importVideos(){var s=document.getElementById('vidUrls').value;var urls=s.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);if(!urls.length){alert('请粘贴链接，每行一个');return;}api('/api/videos/add',{urls:urls}).then(d=>{alert(d.ok?'成功导入 '+d.added+' 条':'失败:'+d.msg);document.getElementById('vidUrls').value='';loadVideos();});}
 function delVideo(id){if(!confirm('删除该视频？'))return;api('/api/videos/del',{id:id}).then(d=>{if(d.ok)loadVideos();});}
 function genKeys(){var n=document.getElementById('genN').value.trim();api('/api/cardkeys/gen',{n:n||1}).then(d=>{if(!d.ok){alert('失败:'+d.msg);return;}document.getElementById('genOut').textContent='已生成 '+(d.codes||[]).length+' 个：'+((d.codes||[]).slice(0,5).join('  ') + ((d.codes||[]).length>5?' …':'') );load();});}
 function addCustom(){var s=document.getElementById('cusCodes').value;api('/api/cardkeys/custom',{codes:s}).then(d=>{alert(d.ok?('成功添加 '+d.added+' 个，重复 '+(d.dup||[]).length+' 个'):('失败:'+d.msg));document.getElementById('cusCodes').value='';load();});}
@@ -434,11 +439,18 @@ const server = http.createServer((req, res) => {
       if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
       let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
       const title = String(o.title || '').slice(0, 80);
-      const vurl = String(o.url || '').trim().slice(0, 500);
-      if (!vurl) return json(res, { ok: false, msg: '请填写视频链接' });
-      DATA.videos.push({ id: Date.now(), title: title || '视频', url: vurl, time: new Date().toLocaleString('zh-CN', { hour12: false }) });
+      const one = String(o.url || '').trim();
+      const many = (o.urls || []).map(s => String(s).trim()).filter(Boolean);
+      const urls = one ? [one] : many;
+      if (!urls.length) return json(res, { ok: false, msg: '请填写视频链接' });
+      let added = 0;
+      urls.forEach(u => {
+        if (!u) return;
+        DATA.videos.push({ id: Date.now() + added, title: title || ('视频' + (added + 1)), url: String(u).slice(0, 500), time: new Date().toLocaleString('zh-CN', { hour12: false }) });
+        added++;
+      });
       if (DATA.videos.length > 500) DATA.videos = DATA.videos.slice(-500);
-      save(); json(res, { ok: true }); return;
+      save(); json(res, { ok: true, added }); return;
     }
     if (url === '/api/videos/del') {
       if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
