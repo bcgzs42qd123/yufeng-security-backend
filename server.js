@@ -27,7 +27,13 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 const APK_DIR = path.join(__dirname, 'apk');
 if (!fs.existsSync(APK_DIR)) fs.mkdirSync(APK_DIR, { recursive: true });
 
-let DATA = { checkins: [], visits: [], version: { v: '1.0', note: '', apkUrl: '', time: 0 } };
+let DATA = {
+  checkins: [], visits: [],
+  version: { v: '1.0', note: '', apkUrl: '', time: 0 },
+  cardkeys: [],
+  announcement: { title: '', content: '', on: false, updatedAt: 0 },
+  settings: { appName: '誉峰保安刷题', primary: '#3b5bff', requireCard: false }
+};
 if (fs.existsSync(DATA_FILE)) {
   try { DATA = Object.assign(DATA, JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); } catch (e) {}
 }
@@ -70,8 +76,14 @@ th{color:#64748b;font-weight:600}
 .tab.on{background:#3b5bff;color:#fff;border-color:#3b5bff}
 .pane{display:none}.pane.on{display:block}
 input[type=text],input[type=password]{width:100%;border:1.5px solid #e8ebf2;border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px}
+textarea{width:100%;border:1.5px solid #e8ebf2;border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px;font-family:inherit}
+input[type=color]{width:60px;height:36px;border:1.5px solid #e8ebf2;border-radius:8px;padding:2px;background:#fff}
 button{border:none;border-radius:10px;padding:10px 18px;font-size:14px;cursor:pointer;background:#3b5bff;color:#fff;font-weight:600}
+button.mini{padding:5px 10px;font-size:12px;border-radius:8px;background:#e5484d}
 button.ghost{background:#eef1f6;color:#64748b}
+.kcode{font-family:monospace;font-weight:700;letter-spacing:.5px}
+label.chk{display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px}
+label.chk input{width:18px;height:18px}
 .warn{color:#e5484d}.okc{color:#17a34a}
 .login-box{max-width:360px;margin:80px auto;background:#fff;border:1px solid #e8ebf2;border-radius:16px;padding:24px;box-shadow:0 8px 28px rgba(24,34,64,.08)}
 .login-box h2{font-size:18px;margin-bottom:16px}
@@ -81,14 +93,14 @@ button.ghost{background:#eef1f6;color:#64748b}
 </style></head><body>
 <div id="login"><div class="login-box"><h2>管理后台登录</h2><input type="password" id="pwd" placeholder="请输入管理密码"><button onclick="doLogin()">登 录</button></div></div>
 <div id="panel" style="display:none">
-<h1>誉峰保安刷题 · 管理后台</h1><div class="sub">软件更新 · 打卡记录 · 登录/访问记录 · IP统计</div>
+<h1>誉峰保安刷题 · 管理后台</h1><div class="sub">软件更新 · 打卡记录 · 登录/访问记录 · IP统计 · 卡密 · 公告 · UI设置</div>
 <div class="stat">
 <div><b id="sCheck">0</b><span>打卡次数</span></div>
 <div><b id="sVisit">0</b><span>访问/登录</span></div>
 <div><b id="sIp">0</b><span>IP数</span></div>
 <div><b id="sVer">-</b><span>当前版本</span></div>
 </div>
-<div class="card"><div class="tab on" data-p="upd">软件更新</div><div class="tab" data-p="check">打卡记录</div><div class="tab" data-p="visit">登录记录</div><div class="tab" data-p="ip">IP查看</div></div>
+<div class="card"><div class="tab on" data-p="upd">软件更新</div><div class="tab" data-p="check">打卡记录</div><div class="tab" data-p="visit">登录记录</div><div class="tab" data-p="ip">IP查看</div><div class="tab" data-p="card">卡密管理</div><div class="tab" data-p="ann">公告</div><div class="tab" data-p="ui">UI设置</div></div>
 
 <div class="pane on" id="p-upd">
   <div class="card"><h2>版本信息</h2>
@@ -105,6 +117,37 @@ button.ghost{background:#eef1f6;color:#64748b}
 <div class="pane card" id="p-check"><table id="tCheck"><tr><th>时间</th><th>姓名</th><th>IP</th><th>备注</th></tr></table></div>
 <div class="pane card" id="p-visit"><table id="tVisit"><tr><th>时间</th><th>IP</th><th>设备</th><th>来源</th></tr></table></div>
 <div class="pane card" id="p-ip"><table id="tIp"><tr><th>IP</th><th>次数</th><th>最近时间</th></tr></table></div>
+
+<div class="pane card" id="p-card">
+  <div class="card"><h2>生成卡密</h2>
+    <input type="text" id="genN" placeholder="生成数量，如 20">
+    <button onclick="genKeys()">生成卡密</button>
+    <p id="genOut" class="sub" style="margin-top:10px"></p>
+  </div>
+  <div class="card"><h2>添加自定义卡密</h2>
+    <textarea id="cusCodes" rows="3" placeholder="每行一个卡密，或用逗号/分号分隔"></textarea>
+    <button onclick="addCustom()">添加自定义卡密</button>
+  </div>
+  <div class="card"><h2>卡密列表 <span id="cardStat" class="sub"></span></h2>
+    <table id="tCard"><tr><th>卡密</th><th>状态</th><th>使用人</th><th>操作</th></tr></table>
+  </div>
+</div>
+
+<div class="pane card" id="p-ann">
+  <h2>发布公告</h2>
+  <input type="text" id="annTitle" placeholder="公告标题">
+  <textarea id="annContent" rows="4" placeholder="公告内容"></textarea>
+  <label class="chk"><input type="checkbox" id="annOn"> 启用公告（前端启动时弹窗显示）</label>
+  <button onclick="saveAnn()">保存公告</button>
+</div>
+
+<div class="pane card" id="p-ui">
+  <h2>UI 设置</h2>
+  <input type="text" id="setName" placeholder="应用名称（前端显示的品牌名）">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><label style="font-size:14px;color:#64748b">主题色</label><input type="color" id="setPrimary"></div>
+  <label class="chk"><input type="checkbox" id="setRequire"> 开启卡密验证（App需输入卡密才能使用）</label>
+  <button onclick="saveUI()">保存UI设置</button>
+</div>
 </div>
 <script>
 var TOK='';
@@ -122,8 +165,24 @@ function load(){
    document.getElementById('tCheck').innerHTML='<tr><th>时间</th><th>姓名</th><th>IP</th><th>备注</th></tr>'+c.map(x=>'<tr><td>'+x.time+'</td><td>'+x.name+'</td><td>'+x.ip+'</td><td>'+(x.note||'')+'</td></tr>').join('');
    document.getElementById('tVisit').innerHTML='<tr><th>时间</th><th>IP</th><th>设备</th><th>来源</th></tr>'+v.map(x=>'<tr><td>'+x.time+'</td><td>'+x.ip+'</td><td>'+(x.device||'')+'</td><td>'+(x.src||'打开')+'</td></tr>').join('');
    document.getElementById('tIp').innerHTML='<tr><th>IP</th><th>次数</th><th>最近时间</th></tr>'+ips.map(x=>'<tr><td>'+x.ip+'</td><td>'+x.n+'</td><td>'+(x.last||'')+'</td></tr>').join('');
+   document.getElementById('cardStat').textContent='（共'+(d.card.total||0)+'个 · 已用'+(d.card.used||0)+'）';
+   var s=d.settings||{};
+   document.getElementById('setName').value=s.appName||'';
+   document.getElementById('setPrimary').value=/^#[0-9a-f]{6}$/i.test(s.primary||'')?s.primary:'#3b5bff';
+   document.getElementById('setRequire').checked=!!s.requireCard;
+   var a=d.announcement||{};
+   document.getElementById('annTitle').value=a.title||'';
+   document.getElementById('annContent').value=a.content||'';
+   document.getElementById('annOn').checked=!!a.on;
+   loadCard();
  });
 }
+function loadCard(){api('/api/cardkeys/list').then(d=>{if(!d.ok)return;document.getElementById('tCard').innerHTML='<tr><th>卡密</th><th>状态</th><th>使用人</th><th>操作</th></tr>'+d.keys.map(x=>'<tr><td class="kcode">'+x.code+'</td><td>'+(x.status==='used'?'<span class="warn">已使用</span>':'<span class="okc">未使用</span>')+'</td><td>'+(x.usedBy||'')+'</td><td><button class="mini" onclick="delKey(\''+x.code+'\')">删除</button></td></tr>').join('')||'<tr><td colspan="4" class="sub">暂无卡密</td></tr>';});}
+function genKeys(){var n=document.getElementById('genN').value.trim();api('/api/cardkeys/gen',{n:n||1}).then(d=>{if(!d.ok){alert('失败:'+d.msg);return;}document.getElementById('genOut').textContent='已生成 '+(d.codes||[]).length+' 个：'+((d.codes||[]).slice(0,5).join('  ') + ((d.codes||[]).length>5?' …':'') );load();});}
+function addCustom(){var s=document.getElementById('cusCodes').value;api('/api/cardkeys/custom',{codes:s}).then(d=>{alert(d.ok?('成功添加 '+d.added+' 个，重复 '+(d.dup||[]).length+' 个'):('失败:'+d.msg));document.getElementById('cusCodes').value='';load();});}
+function delKey(code){if(!confirm('删除卡密 '+code+' ？'))return;api('/api/cardkeys/del',{code:code}).then(d=>{if(d.ok)loadCard();});}
+function saveAnn(){var t=document.getElementById('annTitle').value,c=document.getElementById('annContent').value,on=document.getElementById('annOn').checked;api('/api/announcement',{title:t,content:c,on:on}).then(d=>{alert(d.ok?'公告已保存':'失败:'+d.msg);});}
+function saveUI(){var n=document.getElementById('setName').value,p=document.getElementById('setPrimary').value,r=document.getElementById('setRequire').checked;api('/api/settings',{appName:n,primary:p,requireCard:r}).then(d=>{alert(d.ok?'UI设置已保存':'失败:'+d.msg);});}
 function saveVer(){var v=document.getElementById('v').value.trim(),n=document.getElementById('note').value.trim();api('/api/update',{v,n}).then(d=>{alert(d.ok?'已保存':'失败:'+d.msg);load();});}
 function upApk(){var f=document.getElementById('apkFile').files[0];if(!f){alert('请选择APK文件');return;}fetch('/api/upload',{method:'POST',headers:{'x-token':TOK,'x-fname':f.name},body:f}).then(r=>r.json()).then(d=>{alert(d.ok?'上传成功，已设为最新版':'失败:'+d.msg);load();});}
 </script></body></html>`;
@@ -165,7 +224,7 @@ http.createServer((req, res) => {
       const ipmap = {};
       DATA.visits.forEach(x => { ipmap[x.ip] = (ipmap[x.ip] || 0) + 1; });
       const ips = Object.keys(ipmap).map(ip => ({ ip, n: ipmap[ip], last: DATA.visits.filter(v => v.ip === ip).slice(-1)[0].time }));
-      json(res, { ok: true, checkins: DATA.checkins.slice(-200).reverse(), visits: DATA.visits.slice(-300).reverse(), ips, version: DATA.version });
+      json(res, { ok: true, checkins: DATA.checkins.slice(-200).reverse(), visits: DATA.visits.slice(-300).reverse(), ips, version: DATA.version, card: { total: DATA.cardkeys.length, used: DATA.cardkeys.filter(k => k.status === 'used').length }, settings: DATA.settings, announcement: DATA.announcement });
       return;
     }
     /* 保存版本信息（管理） */
@@ -203,6 +262,69 @@ http.createServer((req, res) => {
     }
     /* App 检查更新 */
     if (url === '/api/version') { json(res, { ok: true, version: DATA.version }); return; }
+
+    /* 公开配置：设置 + 公告（App 启动拉取） */
+    if (url === '/api/config') { json(res, { ok: true, settings: DATA.settings, announcement: DATA.announcement }); return; }
+
+    /* 卡密验证（App） */
+    if (url === '/api/verify') {
+      let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
+      if (!DATA.settings.requireCard) { json(res, { ok: true, msg: '无需卡密' }); return; }
+      const code = String(o.code || '').trim().toUpperCase();
+      if (!code) return json(res, { ok: false, msg: '请输入卡密' });
+      const k = DATA.cardkeys.find(x => x.code === code);
+      if (!k) return json(res, { ok: false, msg: '卡密不存在' });
+      if (k.status === 'used') return json(res, { ok: false, msg: '该卡密已被使用' });
+      k.status = 'used'; k.usedBy = String(o.device || '').slice(0, 40); k.usedAt = Date.now();
+      save(); json(res, { ok: true }); return;
+    }
+
+    /* 卡密管理（管理） */
+    if (url === '/api/cardkeys/gen') {
+      if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
+      let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
+      const n = Math.min(parseInt(o.n) || 1, 1000);
+      const AL = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const arr = [];
+      for (let i = 0; i < n; i++) { let s = ''; while (s.length < 16) s += AL[crypto.randomInt(AL.length)]; arr.push(s.slice(0, 4) + '-' + s.slice(4, 8) + '-' + s.slice(8, 12) + '-' + s.slice(12, 16)); }
+      arr.forEach(c => DATA.cardkeys.push({ code: c, status: 'unused', usedBy: '', usedAt: 0, createdAt: Date.now() }));
+      save(); json(res, { ok: true, codes: arr }); return;
+    }
+    if (url === '/api/cardkeys/custom') {
+      if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
+      let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
+      const list = String(o.codes || '').split(/[\s,;\n]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+      const dup = [];
+      list.forEach(c => { if (DATA.cardkeys.find(x => x.code === c)) dup.push(c); else DATA.cardkeys.push({ code: c, status: 'unused', usedBy: '', usedAt: 0, createdAt: Date.now() }); });
+      save(); json(res, { ok: true, added: list.length - dup.length, dup }); return;
+    }
+    if (url === '/api/cardkeys/list') {
+      if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
+      json(res, { ok: true, keys: DATA.cardkeys.slice().reverse().slice(0, 2000) }); return;
+    }
+    if (url === '/api/cardkeys/del') {
+      if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
+      let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
+      DATA.cardkeys = DATA.cardkeys.filter(x => x.code !== String(o.code || '').trim().toUpperCase());
+      save(); json(res, { ok: true }); return;
+    }
+
+    /* 公告（管理：编辑发布） */
+    if (url === '/api/announcement') {
+      if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
+      let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
+      DATA.announcement = { title: String(o.title || '').slice(0, 80), content: String(o.content || '').slice(0, 2000), on: !!o.on, updatedAt: Date.now() };
+      save(); json(res, { ok: true }); return;
+    }
+
+    /* UI 设置（管理） */
+    if (url === '/api/settings') {
+      if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
+      let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
+      if (typeof o.appName === 'string' && o.appName.trim()) DATA.settings.appName = o.appName.trim().slice(0, 20);
+      if (typeof o.primary === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.primary)) DATA.settings.primary = o.primary;
+      if (typeof o.requireCard === 'boolean') DATA.settings.requireCard = o.requireCard;
+      save(); json(res, { ok: true, settings: DATA.settings }); return;
+    }
 
     json(res, { ok: false, msg: '未知接口' }, 404);
   });
