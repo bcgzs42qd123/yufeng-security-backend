@@ -215,7 +215,7 @@ function load(){
    loadCard();
  });
 }
-function loadCard(){api('/api/cardkeys/list').then(d=>{if(!d.ok)return;document.getElementById('tCard').innerHTML='<tr><th>卡密</th><th>状态</th><th>使用人</th><th>操作</th></tr>'+d.keys.map(x=>'<tr><td class="kcode">'+x.code+'</td><td>'+(x.status==='used'?'<span class="warn">已使用</span>':'<span class="okc">未使用</span>')+'</td><td>'+(x.usedBy||'')+'</td><td><button class="mini" onclick="delKey('+x.code+')">删除</button></td></tr>').join('')||'<tr><td colspan="4" class="sub">暂无卡密</td></tr>';});}
+function loadCard(){api('/api/cardkeys/list').then(d=>{if(!d.ok)return;document.getElementById('tCard').innerHTML='<tr><th>卡密</th><th>状态</th><th>绑定设备</th><th>操作</th></tr>'+d.keys.map(x=>'<tr><td class="kcode">'+x.code+'</td><td>'+(x.status==='used'?'<span class="warn">已用</span>':'<span class="okc">未用</span>')+'</td><td style="font-size:12px;color:#666">'+String(x.bindDev||x.usedBy||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</td><td><button class="mini" onclick="delKey('+x.code+')">删除</button></td></tr>').join('')||'<tr><td colspan="4" class="sub">暂无卡密</td></tr>';});}
 function genKeys(){var n=document.getElementById('genN').value.trim();api('/api/cardkeys/gen',{n:n||1}).then(d=>{if(!d.ok){alert('失败:'+d.msg);return;}document.getElementById('genOut').textContent='已生成 '+(d.codes||[]).length+' 个：'+((d.codes||[]).slice(0,5).join('  ') + ((d.codes||[]).length>5?' …':'') );load();});}
 function addCustom(){var s=document.getElementById('cusCodes').value;api('/api/cardkeys/custom',{codes:s}).then(d=>{alert(d.ok?('成功添加 '+d.added+' 个，重复 '+(d.dup||[]).length+' 个'):('失败:'+d.msg));document.getElementById('cusCodes').value='';load();});}
 function delKey(code){if(!confirm('删除卡密 '+code+' ？'))return;api('/api/cardkeys/del',{code:code}).then(d=>{if(d.ok)loadCard();});}
@@ -352,17 +352,23 @@ const server = http.createServer((req, res) => {
     /* 公开配置：设置 + 公告（App 启动拉取） */
     if (url === '/api/config') { json(res, { ok: true, settings: DATA.settings, announcement: DATA.announcement }); return; }
 
-    /* 卡密验证（App） */
+    /* 卡密验证（App）—— 一机一码：每个卡密只能绑定一台设备 */
     if (url === '/api/verify') {
       let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
       if (!DATA.settings.requireCard) { json(res, { ok: true, msg: '无需卡密' }); return; }
       const code = String(o.code || '').trim().toUpperCase();
+      const dev = String(o.device || '未知设备').slice(0, 64);
       if (!code) return json(res, { ok: false, msg: '请输入卡密' });
       const k = DATA.cardkeys.find(x => x.code === code);
       if (!k) return json(res, { ok: false, msg: '卡密不存在' });
-      if (k.status === 'used') return json(res, { ok: false, msg: '该卡密已被使用' });
-      k.status = 'used'; k.usedBy = String(o.device || '').slice(0, 40); k.usedAt = Date.now();
-      save(); json(res, { ok: true }); return;
+      if (k.status === 'used') {
+        /* 同一台设备再次验证（如清缓存重装后）：放行 */
+        if (k.bindDev && k.bindDev === dev) { json(res, { ok: true, msg: '已验证' }); return; }
+        if (!k.bindDev) return json(res, { ok: false, msg: '该卡密已被使用' });
+        return json(res, { ok: false, msg: '该卡密已绑定其他设备（一机一码），无法在本机使用' });
+      }
+      k.status = 'used'; k.bindDev = dev; k.usedBy = dev; k.usedAt = Date.now();
+      save(); json(res, { ok: true, msg: '激活成功' }); return;
     }
 
     /* 卡密管理（管理） */
