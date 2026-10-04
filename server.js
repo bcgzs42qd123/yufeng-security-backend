@@ -30,7 +30,7 @@ if (!fs.existsSync(APK_DIR)) fs.mkdirSync(APK_DIR, { recursive: true });
 
 let DATA = {
   checkins: [], visits: [],
-  version: { v: '1.0', note: '', apkUrl: '', time: 0 },
+  version: { v: '1.0', note: '', apkUrl: '', time: 0, push: true },
   cardkeys: [],
   announcement: { title: '', content: '', on: false, updatedAt: 0 },
   settings: { appName: '誉峰保安刷题', primary: '#3b5bff', requireCard: false }
@@ -131,6 +131,7 @@ label.chk input{width:18px;height:18px}
 <div class="pane on" id="p-upd">
   <div class="card"><h2>版本信息</h2>
     <input type="text" id="v" placeholder="版本号，如 1.1"><input type="text" id="note" placeholder="更新说明">
+    <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:14px;cursor:pointer"><input type="checkbox" id="vPush" checked style="width:18px;height:18px;accent-color:var(--blue)"> 开启版本推送（开启后App会提示更新、停用旧版本）</label>
     <button onclick="saveVer()">保存版本信息</button>
   </div>
   <div class="card"><h2>上传新版APK</h2>
@@ -200,6 +201,7 @@ function load(){
    document.getElementById('sIp').textContent=ips.length;
    document.getElementById('sVer').textContent=d.version.v||'-';
    document.getElementById('apkInfo').textContent=d.version.apkUrl?('最新：'+d.version.v+'　'+(d.version.apkUrl||'')):'尚未上传APK';
+   var vp=document.getElementById('vPush'); if(vp) vp.checked = d.version.push!==false;
    document.getElementById('tCheck').innerHTML='<tr><th>时间</th><th>姓名</th><th>IP</th><th>备注</th></tr>'+c.map(x=>'<tr><td>'+x.time+'</td><td>'+x.name+'</td><td>'+x.ip+'</td><td>'+(x.note||'')+'</td></tr>').join('');
    document.getElementById('tVisit').innerHTML='<tr><th>时间</th><th>IP</th><th>设备</th><th>来源</th></tr>'+v.map(x=>'<tr><td>'+x.time+'</td><td>'+x.ip+'</td><td>'+(x.device||'')+'</td><td>'+(x.src||'打开')+'</td></tr>').join('');
    document.getElementById('tIp').innerHTML='<tr><th>IP</th><th>次数</th><th>最近时间</th></tr>'+ips.map(x=>'<tr><td>'+x.ip+'</td><td>'+x.n+'</td><td>'+(x.last||'')+'</td></tr>').join('');
@@ -221,7 +223,7 @@ function addCustom(){var s=document.getElementById('cusCodes').value;api('/api/c
 function delKey(code){if(!confirm('删除卡密 '+code+' ？'))return;api('/api/cardkeys/del',{code:code}).then(d=>{if(d.ok)loadCard();});}
 function saveAnn(){var t=document.getElementById('annTitle').value,c=document.getElementById('annContent').value,on=document.getElementById('annOn').checked;api('/api/announcement',{title:t,content:c,on:on}).then(d=>{alert(d.ok?'公告已保存':'失败:'+d.msg);});}
 function saveUI(){var n=document.getElementById('setName').value,p=document.getElementById('setPrimary').value,r=document.getElementById('setRequire').checked;api('/api/settings',{appName:n,primary:p,requireCard:r}).then(d=>{alert(d.ok?'UI设置已保存':'失败:'+d.msg);});}
-function saveVer(){var v=document.getElementById('v').value.trim(),n=document.getElementById('note').value.trim();api('/api/update',{v,n}).then(d=>{alert(d.ok?'已保存':'失败:'+d.msg);load();});}
+function saveVer(){var v=document.getElementById('v').value.trim(),n=document.getElementById('note').value.trim(),push=document.getElementById('vPush').checked;api('/api/update',{v,n,push}).then(d=>{alert(d.ok?'已保存':'失败:'+d.msg);load();});}
 function upApk(){var f=document.getElementById('apkFile').files[0];if(!f){alert('请选择APK文件');return;}var ver=document.getElementById('v').value.trim();if(!ver){if(!confirm('未填写版本号，将沿用当前版本号，确定继续？'))return;}fetch('/api/upload',{method:'POST',headers:{'x-token':TOK,'x-fname':f.name,'x-ver':ver},body:f}).then(r=>r.json()).then(d=>{alert(d.ok?'上传成功，已设为最新版 v'+(d.v||ver||'-'):'失败:'+d.msg);load();});}
 </script></body></html>`;
 
@@ -306,6 +308,7 @@ const server = http.createServer((req, res) => {
       let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
       if (o.v) DATA.version.v = String(o.v).trim();
       if (typeof o.n !== 'undefined') DATA.version.note = String(o.n);
+      if (typeof o.push !== 'undefined') DATA.version.push = !!o.push;
       DATA.version.time = Date.now();
       save(); json(res, { ok: true }); return;
     }
@@ -347,7 +350,7 @@ const server = http.createServer((req, res) => {
       const v = DATA.version || {};
       const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
       const host = req.headers.host || 'yufeng-security-backend.onrender.com';
-      json(res, { ok: true, version: { v: v.v || '1.0', note: v.note || '', apkUrl: apkName ? (proto + '://' + host + '/apk/' + encodeURIComponent(apkName)) : '' } });
+      json(res, { ok: true, version: { v: v.v || '1.0', note: v.note || '', push: v.push !== false, apkUrl: apkName ? (proto + '://' + host + '/apk/' + encodeURIComponent(apkName)) : '' } });
       return;
     }
 
@@ -358,7 +361,7 @@ const server = http.createServer((req, res) => {
       const host = req.headers.host || 'yufeng-security-backend.onrender.com';
       json(res, {
         ok: true, settings: DATA.settings, announcement: DATA.announcement,
-        version: { v: DATA.version.v || '1.0', note: DATA.version.note || '', apkUrl: apkName ? (proto + '://' + host + '/apk/' + encodeURIComponent(apkName)) : (DATA.version.apkUrl || '') }
+        version: { v: DATA.version.v || '1.0', note: DATA.version.note || '', push: DATA.version.push !== false, apkUrl: apkName ? (proto + '://' + host + '/apk/' + encodeURIComponent(apkName)) : (DATA.version.apkUrl || '') }
       }); return;
     }
 
