@@ -269,7 +269,9 @@ const server = http.createServer((req, res) => {
 
   /* ---- 静态 APK 下载 ---- */
   if (url.startsWith('/apk/')) {
-    const file = path.join(APK_DIR, path.basename(url));
+    let name = path.basename(url);
+    try { name = decodeURIComponent(name); } catch (e) {}
+    const file = path.join(APK_DIR, name);
     if (fs.existsSync(file)) { const st = fs.statSync(file); res.writeHead(200, { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': st.size }); fs.createReadStream(file).pipe(res); }
     else json(res, { ok: false, msg: '文件不存在' }, 404);
     return;
@@ -332,7 +334,20 @@ const server = http.createServer((req, res) => {
       save(); json(res, { ok: true }); return;
     }
     /* App 检查更新 */
-    if (url === '/api/version') { json(res, { ok: true, version: DATA.version }); return; }
+    if (url === '/api/version') {
+      let apkName = '';
+      try {
+        const files = fs.readdirSync(APK_DIR).filter(function (f) { return f.toLowerCase().endsWith('.apk'); });
+        if (files.length) {
+          apkName = files.map(function (f) { return { f: f, t: fs.statSync(path.join(APK_DIR, f)).mtimeMs }; }).sort(function (a, b) { return b.t - a.t; })[0].f;
+        }
+      } catch (e) {}
+      const v = DATA.version || {};
+      const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+      const host = req.headers.host || 'yufeng-security-backend.onrender.com';
+      json(res, { ok: true, version: { v: v.v || '1.0', note: v.note || '', apkUrl: apkName ? (proto + '://' + host + '/apk/' + encodeURIComponent(apkName)) : '' } });
+      return;
+    }
 
     /* 公开配置：设置 + 公告（App 启动拉取） */
     if (url === '/api/config') { json(res, { ok: true, settings: DATA.settings, announcement: DATA.announcement }); return; }
