@@ -354,9 +354,11 @@ const server = http.createServer((req, res) => {
     /* 公开配置：设置 + 公告 + 版本（App 启动拉取，用于停用旧版+更新提示） */
     if (url === '/api/config') {
       const apkName = fs.existsSync(APK_DIR) && fs.readdirSync(APK_DIR).filter(f => f.endsWith('.apk')).sort().slice(-1)[0];
+      const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+      const host = req.headers.host || 'yufeng-security-backend.onrender.com';
       json(res, {
         ok: true, settings: DATA.settings, announcement: DATA.announcement,
-        version: { v: DATA.version.v || '1.0', note: DATA.version.note || '', apkUrl: apkName ? (req.headers.host ? 'http://' + req.headers.host + '/apk/' + encodeURIComponent(apkName) : '/apk/' + encodeURIComponent(apkName)) : (DATA.version.apkUrl || '') }
+        version: { v: DATA.version.v || '1.0', note: DATA.version.note || '', apkUrl: apkName ? (proto + '://' + host + '/apk/' + encodeURIComponent(apkName)) : (DATA.version.apkUrl || '') }
       }); return;
     }
 
