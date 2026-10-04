@@ -170,7 +170,7 @@ label.chk input{width:18px;height:18px}
   <h2>UI 设置</h2>
   <input type="text" id="setName" placeholder="应用名称（前端显示的品牌名）">
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><label style="font-size:14px;color:#64748b">主题色</label><input type="color" id="setPrimary"></div>
-  <label class="chk"><input type="checkbox" id="setRequire"> 开启卡密验证（App需输入卡密才能使用）</label>
+  <label class="chk"><input type="checkbox" id="setRequire"> <b>卡密开关</b>（开启后 App 需输入卡密才能使用）</label>
   <button onclick="saveUI()">保存UI设置</button>
 </div>
 </div>
