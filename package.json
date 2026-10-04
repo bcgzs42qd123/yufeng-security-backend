@@ -1,0 +1,12 @@
+{
+  "name": "yufeng-security-backend",
+  "version": "1.0.0",
+  "description": "誉峰保安刷题 管理后端",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
