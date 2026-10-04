@@ -14,6 +14,7 @@
  */
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -225,10 +226,43 @@ function upApk(){var f=document.getElementById('apkFile').files[0];if(!f){alert(
 </script></body></html>`;
 
 /* ===================== HTTP 服务 ===================== */
+/* 在线中文女声朗读：代理 Google 翻译 TTS（从海外后端取音频，供国内用户播放） */
+function gttsChunk(text) {
+  return new Promise(function (resolve, reject) {
+    const gurl = 'https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=' + encodeURIComponent(text);
+    const rq = https.get(gurl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Referer': 'https://translate.google.com/' } }, function (r) {
+      if (r.statusCode !== 200) { r.resume(); reject(new Error('tts ' + r.statusCode)); return; }
+      const c = []; r.on('data', function (x) { c.push(x); }); r.on('end', function () { resolve(Buffer.concat(c)); });
+    });
+    rq.on('error', reject);
+  });
+}
+function ttsProxy(text) {
+  const chunks = [];
+  for (let i = 0; i < text.length; i += 180) chunks.push(text.slice(i, i + 180));
+  return (async function () {
+    const parts = [];
+    for (const c of chunks) { parts.push(await gttsChunk(c)); await new Promise(function (r) { setTimeout(r, 130); }); }
+    return Buffer.concat(parts);
+  })();
+}
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.apk': 'application/vnd.android.package-archive' };
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   const url = req.url.split('?')[0];
+
+  /* ---- 在线朗读 TTS（公开） ---- */
+  if (url === '/api/tts') {
+    const raw = (req.url.split('?')[1] || '').replace(/^text=/, '');
+    const text = (decodeURIComponent(raw.replace(/\+/g, '%20')) || '').trim();
+    if (!text) { json(res, { ok: false, msg: 'no text' }); return; }
+    ttsProxy(text).then(function (buf) {
+      if (!buf.length) { json(res, { ok: false, msg: 'empty audio' }); return; }
+      res.writeHead(200, Object.assign({}, CORS, { 'Content-Type': 'audio/mpeg', 'Content-Length': buf.length, 'Cache-Control': 'no-store' }));
+      res.end(buf);
+    }).catch(function (e) { json(res, { ok: false, msg: String((e && e.message) || e) }); });
+    return;
+  }
 
   /* ---- 管理后台页 ---- */
   if (url === '/admin' || url === '/admin/') { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(ADMIN_HTML); return; }
