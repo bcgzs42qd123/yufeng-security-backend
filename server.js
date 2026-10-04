@@ -37,7 +37,32 @@ let DATA = {
 if (fs.existsSync(DATA_FILE)) {
   try { DATA = Object.assign(DATA, JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); } catch (e) {}
 }
-function save() { try { fs.writeFileSync(DATA_FILE, JSON.stringify(DATA)); } catch (e) {} }
+function save() {
+  try { fs.writeFileSync(DATA_FILE, JSON.stringify(DATA)); } catch (e) {}
+  if (PG) { PG.query("INSERT INTO kv(key,val) VALUES('data',$1) ON CONFLICT(key) DO UPDATE SET val=$1", [JSON.stringify(DATA)]).catch(function(e){ console.log('pg save err: ' + e.message); }); }
+}
+/* 持久化：优先用 Postgres（PGURL 环境变量），失败则退回本地文件 */
+let PG = null;
+if (process.env.PGURL) {
+  try {
+    const { Client } = require('pg');
+    PG = new Client({ connectionString: process.env.PGURL, ssl: process.env.PGSSL === 'false' ? false : { rejectUnauthorized: false } });
+  } catch (e) { PG = null; }
+}
+function loadPG(cb) {
+  if (!PG) { return cb(); }
+  PG.connect(function(err){
+    if (err) { console.log('PG connect fail, use local file: ' + err.message); PG = null; return cb(); }
+    PG.query('CREATE TABLE IF NOT EXISTS kv(key text primary key, val text)').then(function(){
+      return PG.query("SELECT val FROM kv WHERE key='data'");
+    }).then(function(r){
+      if (r && r.rows && r.rows[0] && r.rows[0].val) {
+        try { DATA = Object.assign(DATA, JSON.parse(r.rows[0].val)); } catch (e) {}
+      }
+      cb();
+    }).catch(function(e){ console.log('pg load err: ' + e.message); cb(); });
+  });
+}
 
 // 管理后台会话 token（重启失效）
 const TOKENS = new Set();
@@ -91,7 +116,7 @@ label.chk input{width:18px;height:18px}
 .stat div{background:#fff;border:1px solid #e8ebf2;border-radius:12px;padding:12px;text-align:center}
 .stat b{font-size:22px;display:block}.stat span{font-size:12px;color:#64748b}
 </style></head><body>
-<div id="login"><div class="login-box"><h2>管理后台登录</h2><input type="password" id="pwd" placeholder="请输入管理密码"><button onclick="doLogin()">登 录</button></div></div>
+<div id="login"><div class="login-box"><h2>管理后台登录</h2><input type="password" id="pwd" placeholder="请输入管理密码"><button id="loginBtn" onclick="doLogin()">登 录</button><p class="sub" style="margin-top:10px;color:#a3acc2;font-size:12px">免费服务闲置会休眠，首次登录请稍等片刻</p></div></div>
 <div id="panel" style="display:none">
 <h1>誉峰保安刷题 · 管理后台</h1><div class="sub">软件更新 · 打卡记录 · 登录/访问记录 · IP统计 · 卡密 · 公告 · UI设置</div>
 <div class="stat">
@@ -152,7 +177,19 @@ label.chk input{width:18px;height:18px}
 <script>
 var TOK='';
 function api(p,o){return fetch(p,{method:'POST',headers:{'Content-Type':'application/json','x-token':TOK},body:o?JSON.stringify(o):'{}'}).then(r=>r.json());}
-function doLogin(){api('/api/auth',{pass:document.getElementById('pwd').value}).then(d=>{if(d.ok){TOK=d.token;document.getElementById('login').style.display='none';document.getElementById('panel').style.display='block';load();}else{alert('密码错误');}});}
+function doLogin(){
+  var b=document.getElementById('loginBtn'), p=document.getElementById('pwd').value.trim();
+  if(!p){alert('请输入管理密码');return;}
+  b.disabled=true; b.textContent='登录中…';
+  fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:p})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      b.disabled=false; b.textContent='登 录';
+      if(d.ok){TOK=d.token;document.getElementById('login').style.display='none';document.getElementById('panel').style.display='block';load();}
+      else{alert('密码错误');}
+    })
+    .catch(function(){ b.disabled=false; b.textContent='登 录'; alert('连接失败，请重试（免费服务首次访问可能需等待数十秒）'); });
+}
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));document.getElementById('p-'+t.dataset.p).classList.add('on');});
 function load(){
  api('/api/data').then(d=>{if(!d.ok)return;
@@ -189,7 +226,7 @@ function upApk(){var f=document.getElementById('apkFile').files[0];if(!f){alert(
 
 /* ===================== HTTP 服务 ===================== */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.apk': 'application/vnd.android.package-archive' };
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   const url = req.url.split('?')[0];
 
@@ -328,9 +365,12 @@ http.createServer((req, res) => {
 
     json(res, { ok: false, msg: '未知接口' }, 404);
   });
-}).listen(PORT, () => {
-  console.log('誉峰保安刷题 管理后端已启动');
-  console.log('端口：' + PORT);
-  console.log('管理后台：http://<服务器地址>:' + PORT + '/admin');
-  console.log('管理密码：' + ADMIN_PASS + '（请在 server.js 里改成自己的）');
+});
+loadPG(function(){
+  server.listen(PORT, () => {
+    console.log('誉峰保安刷题 管理后端已启动');
+    console.log('端口：' + PORT);
+    console.log('管理后台：http://<服务器地址>:' + PORT + '/admin');
+    console.log('管理密码：' + ADMIN_PASS + '（请在 server.js 里改成自己的）');
+  });
 });
