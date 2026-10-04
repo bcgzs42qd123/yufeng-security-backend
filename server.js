@@ -32,12 +32,12 @@ let DATA = {
   checkins: [], visits: [],
   version: { v: '1.0', note: '', apkUrl: '', time: 0, push: true },
   cardkeys: [],
-  videos: [],
   announcement: { title: '', content: '', on: false, updatedAt: 0 },
   settings: { appName: '誉峰保安刷题', primary: '#3b5bff', requireCard: false }
 };
 if (fs.existsSync(DATA_FILE)) {
   try { DATA = Object.assign(DATA, JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); } catch (e) {}
+  delete DATA.videos; /* 视频功能已下线 */
 }
 function save() {
   try { fs.writeFileSync(DATA_FILE, JSON.stringify(DATA)); } catch (e) {}
@@ -60,6 +60,7 @@ function loadPG(cb) {
     }).then(function(r){
       if (r && r.rows && r.rows[0] && r.rows[0].val) {
         try { DATA = Object.assign(DATA, JSON.parse(r.rows[0].val)); } catch (e) {}
+        delete DATA.videos; /* 视频功能已下线 */
       }
       cb();
     }).catch(function(e){ console.log('pg load err: ' + e.message); cb(); });
@@ -127,7 +128,7 @@ label.chk input{width:18px;height:18px}
 <div><b id="sIp">0</b><span>IP数</span></div>
 <div><b id="sVer">-</b><span>当前版本</span></div>
 </div>
-<div class="card"><div class="tab on" data-p="upd">软件更新</div><div class="tab" data-p="check">打卡记录</div><div class="tab" data-p="visit">登录记录</div><div class="tab" data-p="ip">IP查看</div><div class="tab" data-p="card">卡密管理</div><div class="tab" data-p="vid">视频管理</div><div class="tab" data-p="ann">公告</div><div class="tab" data-p="ui">UI设置</div></div>
+<div class="card"><div class="tab on" data-p="upd">软件更新</div><div class="tab" data-p="check">打卡记录</div><div class="tab" data-p="visit">登录记录</div><div class="tab" data-p="ip">IP查看</div><div class="tab" data-p="card">卡密管理</div><div class="tab" data-p="ann">公告</div><div class="tab" data-p="ui">UI设置</div></div>
 
 <div class="pane on" id="p-upd">
   <div class="card"><h2>版本信息</h2>
@@ -145,18 +146,6 @@ label.chk input{width:18px;height:18px}
 <div class="pane card" id="p-check"><table id="tCheck"><tr><th>时间</th><th>姓名</th><th>IP</th><th>备注</th></tr></table></div>
 <div class="pane card" id="p-visit"><table id="tVisit"><tr><th>时间</th><th>IP</th><th>设备</th><th>来源</th></tr></table></div>
 <div class="pane card" id="p-ip"><table id="tIp"><tr><th>IP</th><th>次数</th><th>最近时间</th></tr></table></div>
-
-<div class="pane card" id="p-vid">
-  <div class="card"><h2>添加短视频</h2>
-    <input type="text" id="vidTitle" placeholder="视频标题"><input type="text" id="vidUrl" placeholder="视频链接（mp4直链）"><br><br>
-    <button onclick="addVideo()">添加视频</button>
-  </div>
-  <div class="card"><h2>批量导入链接</h2>
-    <textarea id="vidUrls" rows="4" placeholder="每行一个视频链接（mp4直链）" style="width:100%;box-sizing:border-box"></textarea><br><br>
-    <button onclick="importVideos()">批量导入</button>
-  </div>
-  <table id="tVid"><tr><th>标题</th><th>链接</th><th>时间</th><th>操作</th></tr></table>
-</div>
 
 <div class="pane card" id="p-card">
   <div class="card"><h2>生成卡密</h2>
@@ -228,14 +217,9 @@ function load(){
    document.getElementById('annContent').value=a.content||'';
    document.getElementById('annOn').checked=!!a.on;
    loadCard();
-   loadVideos();
  });
 }
 function loadCard(){api('/api/cardkeys/list').then(d=>{if(!d.ok)return;document.getElementById('tCard').innerHTML='<tr><th>卡密</th><th>状态</th><th>绑定设备</th><th>操作</th></tr>'+d.keys.map(x=>'<tr><td class="kcode">'+x.code+'</td><td>'+(x.status==='used'?'<span class="warn">已用</span>':'<span class="okc">未用</span>')+'</td><td style="font-size:12px;color:#666">'+String(x.bindDev||x.usedBy||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</td><td><button class="mini" onclick="delKey('+x.code+')">删除</button></td></tr>').join('')||'<tr><td colspan="4" class="sub">暂无卡密</td></tr>';});}
-function loadVideos(){api('/api/videos').then(d=>{if(!d.ok)return;document.getElementById('tVid').innerHTML='<tr><th>标题</th><th>链接</th><th>时间</th><th>操作</th></tr>'+d.videos.map(x=>'<tr><td>'+String(x.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</td><td style="font-size:12px;color:#666;max-width:220px;word-break:break-all">'+String(x.url||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</td><td style="font-size:12px;color:#666">'+(x.time||'')+'</td><td><button class="mini" onclick="delVideo('+x.id+')">删除</button></td></tr>').join('')||'<tr><td colspan="4" class="sub">暂无视频</td></tr>';});}
-function addVideo(){var t=document.getElementById('vidTitle').value.trim(),u=document.getElementById('vidUrl').value.trim();if(!u){alert('请填写视频链接');return;}api('/api/videos/add',{title:t,url:u}).then(d=>{alert(d.ok?'已添加 '+d.added+' 条':'失败:'+d.msg);document.getElementById('vidTitle').value='';document.getElementById('vidUrl').value='';loadVideos();});}
-function importVideos(){var s=document.getElementById('vidUrls').value;var urls=s.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);if(!urls.length){alert('请粘贴链接，每行一个');return;}api('/api/videos/add',{urls:urls}).then(d=>{alert(d.ok?'成功导入 '+d.added+' 条':'失败:'+d.msg);document.getElementById('vidUrls').value='';loadVideos();});}
-function delVideo(id){if(!confirm('删除该视频？'))return;api('/api/videos/del',{id:id}).then(d=>{if(d.ok)loadVideos();});}
 function genKeys(){var n=document.getElementById('genN').value.trim();api('/api/cardkeys/gen',{n:n||1}).then(d=>{if(!d.ok){alert('失败:'+d.msg);return;}document.getElementById('genOut').textContent='已生成 '+(d.codes||[]).length+' 个：'+((d.codes||[]).slice(0,5).join('  ') + ((d.codes||[]).length>5?' …':'') );load();});}
 function addCustom(){var s=document.getElementById('cusCodes').value;api('/api/cardkeys/custom',{codes:s}).then(d=>{alert(d.ok?('成功添加 '+d.added+' 个，重复 '+(d.dup||[]).length+' 个'):('失败:'+d.msg));document.getElementById('cusCodes').value='';load();});}
 function delKey(code){if(!confirm('删除卡密 '+code+' ？'))return;api('/api/cardkeys/del',{code:code}).then(d=>{if(d.ok)loadCard();});}
@@ -428,34 +412,6 @@ const server = http.createServer((req, res) => {
       if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
       let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
       DATA.cardkeys = DATA.cardkeys.filter(x => x.code !== String(o.code || '').trim().toUpperCase());
-      save(); json(res, { ok: true }); return;
-    }
-
-    /* 视频管理（App 读取 / 管理增删） */
-    if (url === '/api/videos') {
-      json(res, { ok: true, videos: DATA.videos.slice().reverse() }); return;
-    }
-    if (url === '/api/videos/add') {
-      if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
-      let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
-      const title = String(o.title || '').slice(0, 80);
-      const one = String(o.url || '').trim();
-      const many = (o.urls || []).map(s => String(s).trim()).filter(Boolean);
-      const urls = one ? [one] : many;
-      if (!urls.length) return json(res, { ok: false, msg: '请填写视频链接' });
-      let added = 0;
-      urls.forEach(u => {
-        if (!u) return;
-        DATA.videos.push({ id: Date.now() + added, title: title || ('视频' + (added + 1)), url: String(u).slice(0, 500), time: new Date().toLocaleString('zh-CN', { hour12: false }) });
-        added++;
-      });
-      if (DATA.videos.length > 500) DATA.videos = DATA.videos.slice(-500);
-      save(); json(res, { ok: true, added }); return;
-    }
-    if (url === '/api/videos/del') {
-      if (!isAdmin(req)) return json(res, { ok: false, msg: '未授权' }, 401);
-      let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
-      DATA.videos = DATA.videos.filter(x => x.id !== Number(o.id));
       save(); json(res, { ok: true }); return;
     }
 
