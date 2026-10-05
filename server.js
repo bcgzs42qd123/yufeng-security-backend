@@ -191,6 +191,11 @@ tr:last-child td{border-bottom:none}
 <div class="pane card" id="p-ip"><table id="tIp"><tr><th>IP</th><th>次数</th><th>最近时间</th></tr></table></div>
 
 <div class="pane" id="p-card">
+  <div class="card"><h2>卡密总开关</h2>
+    <label class="chk"><input type="checkbox" id="cardSwitch"> <b>启用卡密验证</b></label>
+    <p class="sub" style="margin-bottom:10px">关闭后所有设备免卡密直接使用；开启后新设备登录需输入卡密</p>
+    <button onclick="saveCardSwitch()">保存开关</button>
+  </div>
   <div class="card"><h2>生成卡密</h2>
     <input type="text" id="genN" placeholder="生成数量，如 20">
     <button onclick="genKeys()">生成卡密</button>
@@ -257,6 +262,7 @@ function load(){
    document.getElementById('setName').value=s.appName||'';
    document.getElementById('setPrimary').value=/^#[0-9a-f]{6}$/i.test(s.primary||'')?s.primary:'#3b5bff';
    document.getElementById('setRequire').checked=!!s.requireCard;
+   var cs=document.getElementById('cardSwitch'); if(cs) cs.checked=!!s.requireCard;
    var a=d.announcement||{};
    document.getElementById('annTitle').value=a.title||'';
    document.getElementById('annContent').value=a.content||'';
@@ -270,6 +276,7 @@ function addCustom(){var s=document.getElementById('cusCodes').value;api('/api/c
 function delKey(code){if(!confirm('删除卡密 '+code+' ？'))return;api('/api/cardkeys/del',{code:code}).then(d=>{if(d.ok)loadCard();});}
 function saveAnn(){var t=document.getElementById('annTitle').value,c=document.getElementById('annContent').value,on=document.getElementById('annOn').checked;api('/api/announcement',{title:t,content:c,on:on}).then(d=>{alert(d.ok?'公告已保存':'失败:'+d.msg);});}
 function saveUI(){var n=document.getElementById('setName').value,p=document.getElementById('setPrimary').value,r=document.getElementById('setRequire').checked;api('/api/settings',{appName:n,primary:p,requireCard:r}).then(d=>{alert(d.ok?'UI设置已保存':'失败:'+d.msg);});}
+function saveCardSwitch(){var r=document.getElementById('cardSwitch').checked;api('/api/settings',{requireCard:r}).then(d=>{alert(d.ok?('卡密总开关已'+(r?'开启':'关闭')):('失败:'+d.msg));load();});}
 function saveVer(){var v=document.getElementById('v').value.trim(),n=document.getElementById('note').value.trim(),push=document.getElementById('vPush').checked;api('/api/update',{v,n,push}).then(d=>{alert(d.ok?'已保存':'失败:'+d.msg);load();});}
 function upApk(){var f=document.getElementById('apkFile').files[0];if(!f){alert('请选择APK文件');return;}var ver=document.getElementById('v').value.trim();if(!ver){if(!confirm('未填写版本号，将沿用当前版本号，确定继续？'))return;}fetch('/api/upload',{method:'POST',headers:{'x-token':TOK,'x-fname':f.name,'x-ver':ver},body:f}).then(r=>r.json()).then(d=>{alert(d.ok?'上传成功，已设为最新版 v'+(d.v||ver||'-'):'失败:'+d.msg);load();});}
 </script></body></html>`;
@@ -295,6 +302,34 @@ function ttsProxy(text) {
     return Buffer.concat(parts);
   })();
 }
+/* 把 User-Agent 解析成简短中文机型（如“小米 Redmi K50”，不要太长） */
+function shortDevice(ua) {
+  ua = String(ua || '');
+  function md(re) { const m = ua.match(re); return (m && m[1]) ? m[1] : ''; }
+  if (/iPhone|iPad|iPod/i.test(ua)) return /iPad/i.test(ua) ? '苹果iPad' : '苹果iPhone';
+  if (/Windows/i.test(ua)) return '电脑(Windows)';
+  if (/Macintosh|Mac OS/i.test(ua)) return '电脑(Mac)';
+  if (/Android|Linux/i.test(ua)) {
+    const list = [
+      { t: /(xiaomi|redmi|poco|mi[ _/])/i, b: '小米', r: /(?:xiaomi|redmi|poco|mi[ _/])[ _/]?([A-Za-z0-9]{2,18})/i },
+      { t: /huawei|honor/i, b: '华为', r: /(?:huawei|honor)[ _/]?([A-Za-z0-9-]{2,18})/i },
+      { t: /vivo/i, b: 'vivo', r: /vivo[ _/]?([A-Za-z0-9]{2,15})/i },
+      { t: /(oppo|oneplus)/i, b: 'OPPO', r: /(?:oppo|oneplus)[ _/]?([A-Za-z0-9]{2,15})/i },
+      { t: /samsung|sm-[a-z0-9]/i, b: '三星', r: /(?:sm-|samsung[ _/])[ _/]?([a-z0-9-]{2,15})/i },
+      { t: /realme/i, b: 'realme', r: /realme[ _/]?([A-Za-z0-9]{2,15})/i },
+      { t: /zte/i, b: '中兴', r: /zte[ _/]?([A-Za-z0-9]{2,15})/i },
+      { t: /meizu/i, b: '魅族', r: /meizu[ _/]?([A-Za-z0-9]{2,15})/i },
+      { t: /moto|motorola/i, b: '摩托罗拉', r: /(?:moto|motorola)[ _/]?([A-Za-z0-9]{2,15})/i },
+      { t: /nokia/i, b: '诺基亚', r: /nokia[ _/]?([A-Za-z0-9]{2,15})/i },
+      { t: /pixel|google/i, b: '谷歌', r: /(?:pixel|google)[ _/]?([A-Za-z0-9]{2,15})/i },
+      { t: /lenovo/i, b: '联想', r: /lenovo[ _/]?([A-Za-z0-9]{2,15})/i }
+    ];
+    for (const it of list) { if (it.t.test(ua)) { const m = md(it.r); return m ? it.b + ' ' + m : it.b; } }
+    return '安卓手机';
+  }
+  return '其他设备';
+}
+
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.apk': 'application/vnd.android.package-archive' };
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
@@ -374,7 +409,7 @@ const server = http.createServer((req, res) => {
     /* App 上报：打开/访问 */
     if (url === '/api/report') {
       let o = {}; try { o = JSON.parse(buf.toString()); } catch (e) {}
-      DATA.visits.push({ time: new Date().toLocaleString('zh-CN', { hour12: false }), ip, device: String((req.headers['user-agent'] || '').slice(0, 80)), src: o.type || '打开' });
+      DATA.visits.push({ time: new Date().toLocaleString('zh-CN', { hour12: false }), ip, device: shortDevice(req.headers['user-agent']), src: o.type || '打开' });
       if (DATA.visits.length > 2000) DATA.visits = DATA.visits.slice(-2000);
       save(); json(res, { ok: true }); return;
     }
