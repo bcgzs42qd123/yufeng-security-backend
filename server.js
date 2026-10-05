@@ -90,54 +90,97 @@ function isAdmin(req) { return TOKENS.has((req.headers['x-token'] || '').trim())
 /* ===================== 管理后台页面 ===================== */
 const ADMIN_HTML = `<!DOCTYPE html>
 <html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>誉峰保安刷题 · 管理后台</title>
+<title>誉峰保安管理端</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
-body{background:#f2f4f9;color:#0f1b2d;padding:16px;max-width:900px;margin:auto}
-h1{font-size:20px;margin-bottom:4px}.sub{color:#64748b;font-size:13px;margin-bottom:18px}
-.card{background:#fff;border:1px solid #e8ebf2;border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 2px 12px rgba(24,34,64,.05)}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;-webkit-tap-highlight-color:transparent}
+body{background:#f4f6fb;color:#10213d;font-size:15px}
+#login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(1000px 500px at 50% -10%,#3b5bff2a,transparent),#f4f6fb}
+.lg-box{width:100%;max-width:380px;background:#fff;border:1px solid #eef1f8;border-radius:22px;padding:32px 26px;box-shadow:0 18px 48px rgba(24,34,64,.10);text-align:center}
+.lg-logo{width:64px;height:64px;margin:0 auto 14px;border-radius:18px;background:linear-gradient(135deg,#3b5bff,#6a7dff);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 8px 20px rgba(59,91,255,.3)}
+.lg-logo svg{width:32px;height:32px}
+.lg-box h2{font-size:20px;margin-bottom:4px}
+.lg-sub{color:#8a94a6;font-size:13px;margin-bottom:24px}
+.lg-box input{width:100%;border:1.5px solid #e4e9f4;border-radius:12px;padding:13px 14px;font-size:15px;margin-bottom:12px;outline:none}
+.lg-box input:focus{border-color:#3b5bff}
+#loginBtn{width:100%;border:none;border-radius:12px;padding:14px;background:linear-gradient(135deg,#3b5bff,#5b75ff);color:#fff;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 8px 18px rgba(59,91,255,.28)}
+#loginBtn:disabled{opacity:.6}
+.lg-tip{color:#b0b8c8;font-size:12px;margin-top:14px}
+#panel{max-width:720px;margin:auto;padding-bottom:40px}
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid #eef1f8;padding:12px 16px}
+.tb-title{font-size:17px;font-weight:800;display:flex;align-items:center;gap:10px}
+.tb-title svg{width:22px;height:22px;color:#3b5bff}
+.tb-right{display:flex;align-items:center;gap:10px}
+.ver-chip{font-size:12px;color:#3b5bff;background:#3b5bff18;padding:4px 10px;border-radius:20px;font-weight:700}
+#panel .ghost{background:#f1f4fb;color:#64748b;border:none;border-radius:10px;padding:7px 12px;font-size:13px;cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 14px 0}
+.scard{background:#fff;border:1px solid #eef1f8;border-radius:16px;padding:14px 8px;text-align:center;box-shadow:0 4px 14px rgba(24,34,64,.04)}
+.scard b{font-size:22px;display:block;line-height:1.2;color:#10213d}
+.scard span{font-size:12px;color:#8a94a6}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:14px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:12px;background:#fff;border:1px solid #eef1f8;color:#64748b;font-size:13px;cursor:pointer;white-space:nowrap}
+.tab svg{width:17px;height:17px}
+.tab.on{background:linear-gradient(135deg,#3b5bff,#5b75ff);color:#fff;border-color:transparent;box-shadow:0 6px 14px rgba(59,91,255,.25)}
+.pane{display:none;padding:0 14px}
+.pane.on{display:block}
+.card{background:#fff;border:1px solid #eef1f8;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 4px 14px rgba(24,34,64,.04)}
 .card h2{font-size:15px;margin-bottom:12px}
+input[type=text],input[type=password],textarea{width:100%;border:1.5px solid #e4e9f4;border-radius:12px;padding:11px 13px;font-size:14px;margin-bottom:10px;outline:none;font-family:inherit}
+textarea{resize:vertical}
+input:focus{border-color:#3b5bff}
+input[type=color]{width:60px;height:38px;border:1.5px solid #e4e9f4;border-radius:10px;padding:2px;background:#fff}
+button{border:none;border-radius:12px;padding:11px 18px;font-size:14px;cursor:pointer;background:linear-gradient(135deg,#3b5bff,#5b75ff);color:#fff;font-weight:600}
+button.mini{padding:6px 12px;font-size:12px;border-radius:9px;background:#e5484d}
+label.chk{display:flex;align-items:center;gap:8px;font-size:14px;margin:10px 0;cursor:pointer}
+label.chk input{width:18px;height:18px;accent-color:#3b5bff}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #eef1f6;white-space:nowrap}
-th{color:#64748b;font-weight:600}
-.tab{display:inline-block;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:13px;margin-right:6px;background:#fff;border:1px solid #e8ebf2;color:#64748b}
-.tab.on{background:#3b5bff;color:#fff;border-color:#3b5bff}
-.pane{display:none}.pane.on{display:block}
-input[type=text],input[type=password]{width:100%;border:1.5px solid #e8ebf2;border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px}
-textarea{width:100%;border:1.5px solid #e8ebf2;border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px;font-family:inherit}
-input[type=color]{width:60px;height:36px;border:1.5px solid #e8ebf2;border-radius:8px;padding:2px;background:#fff}
-button{border:none;border-radius:10px;padding:10px 18px;font-size:14px;cursor:pointer;background:#3b5bff;color:#fff;font-weight:600}
-button.mini{padding:5px 10px;font-size:12px;border-radius:8px;background:#e5484d}
-button.ghost{background:#eef1f6;color:#64748b}
+th,td{text-align:left;padding:10px 6px;border-bottom:1px solid #f0f2f8;white-space:nowrap}
+th{color:#8a94a6;font-weight:600;font-size:12px}
+tr:last-child td{border-bottom:none}
 .kcode{font-family:monospace;font-weight:700;letter-spacing:.5px}
-label.chk{display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px}
-label.chk input{width:18px;height:18px}
-.warn{color:#e5484d}.okc{color:#17a34a}
-.login-box{max-width:360px;margin:80px auto;background:#fff;border:1px solid #e8ebf2;border-radius:16px;padding:24px;box-shadow:0 8px 28px rgba(24,34,64,.08)}
-.login-box h2{font-size:18px;margin-bottom:16px}
-.stat{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
-.stat div{background:#fff;border:1px solid #e8ebf2;border-radius:12px;padding:12px;text-align:center}
-.stat b{font-size:22px;display:block}.stat span{font-size:12px;color:#64748b}
+.warn{color:#e5484d;font-weight:600}.okc{color:#17a34a;font-weight:600}
+.sub{color:#8a94a6;font-size:12px}
+#apkInfo{word-break:break-all}
+@media(max-width:480px){.stats{grid-template-columns:repeat(2,1fr)}}
 </style></head><body>
-<div id="login"><div class="login-box"><h2>管理后台登录</h2><input type="password" id="pwd" placeholder="请输入管理密码"><button id="loginBtn" onclick="doLogin()">登 录</button><p class="sub" style="margin-top:10px;color:#a3acc2;font-size:12px">免费服务闲置会休眠，首次登录请稍等片刻</p></div></div>
+<div id="login"><div class="lg-box">
+  <div class="lg-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+  <h2>誉峰保安管理端</h2>
+  <p class="lg-sub">誉峰保安刷题 · 管理后台</p>
+  <input type="password" id="pwd" placeholder="请输入管理密码">
+  <button id="loginBtn" onclick="doLogin()">登 录</button>
+  <p class="lg-tip">免费服务闲置会休眠，首次登录请稍等片刻</p>
+</div></div>
+
 <div id="panel" style="display:none">
-<h1>誉峰保安刷题 · 管理后台</h1><div class="sub">软件更新 · 打卡记录 · 登录/访问记录 · IP统计 · 卡密 · 公告 · UI设置</div>
-<div class="stat">
-<div><b id="sCheck">0</b><span>打卡次数</span></div>
-<div><b id="sVisit">0</b><span>访问/登录</span></div>
-<div><b id="sIp">0</b><span>IP数</span></div>
-<div><b id="sVer">-</b><span>当前版本</span></div>
+<header class="topbar">
+  <div class="tb-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>誉峰保安管理端</div>
+  <div class="tb-right"><span class="ver-chip" id="tbVer">-</span><button class="ghost" onclick="doLogout()">退出</button></div>
+</header>
+<div class="stats">
+  <div class="scard"><b id="sCheck">0</b><span>打卡次数</span></div>
+  <div class="scard"><b id="sVisit">0</b><span>访问/登录</span></div>
+  <div class="scard"><b id="sIp">0</b><span>IP 数</span></div>
+  <div class="scard"><b id="sVer">-</b><span>当前版本</span></div>
 </div>
-<div class="card"><div class="tab on" data-p="upd">软件更新</div><div class="tab" data-p="check">打卡记录</div><div class="tab" data-p="visit">登录记录</div><div class="tab" data-p="ip">IP查看</div><div class="tab" data-p="card">卡密管理</div><div class="tab" data-p="ann">公告</div><div class="tab" data-p="ui">UI设置</div></div>
+<nav class="tabs">
+  <div class="tab on" data-p="upd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>更新</div>
+  <div class="tab" data-p="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>打卡</div>
+  <div class="tab" data-p="visit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>登录</div>
+  <div class="tab" data-p="ip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>IP</div>
+  <div class="tab" data-p="card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg>卡密</div>
+  <div class="tab" data-p="ann"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3M18 4a3 3 0 1 1 0 6"/></svg>公告</div>
+  <div class="tab" data-p="ui"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>UI</div>
+</nav>
 
 <div class="pane on" id="p-upd">
   <div class="card"><h2>版本信息</h2>
     <input type="text" id="v" placeholder="版本号，如 1.1"><input type="text" id="note" placeholder="更新说明">
-    <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:14px;cursor:pointer"><input type="checkbox" id="vPush" checked style="width:18px;height:18px;accent-color:var(--blue)"> 开启版本推送（开启后App会提示更新、停用旧版本）</label>
+    <label class="chk"><input type="checkbox" id="vPush" checked> 开启版本推送（开启后App提示更新、停用旧版本）</label>
     <button onclick="saveVer()">保存版本信息</button>
   </div>
   <div class="card"><h2>上传新版APK</h2>
-    <input type="file" id="apkFile" accept=".apk"><br><br>
+    <input type="file" id="apkFile" accept=".apk" style="margin-bottom:12px"><br>
     <button onclick="upApk()">上传并设为最新版</button>
     <p id="apkInfo" class="sub" style="margin-top:10px"></p>
   </div>
@@ -147,7 +190,7 @@ label.chk input{width:18px;height:18px}
 <div class="pane card" id="p-visit"><table id="tVisit"><tr><th>时间</th><th>IP</th><th>设备</th><th>来源</th></tr></table></div>
 <div class="pane card" id="p-ip"><table id="tIp"><tr><th>IP</th><th>次数</th><th>最近时间</th></tr></table></div>
 
-<div class="pane card" id="p-card">
+<div class="pane" id="p-card">
   <div class="card"><h2>生成卡密</h2>
     <input type="text" id="genN" placeholder="生成数量，如 20">
     <button onclick="genKeys()">生成卡密</button>
@@ -173,7 +216,7 @@ label.chk input{width:18px;height:18px}
 <div class="pane card" id="p-ui">
   <h2>UI 设置</h2>
   <input type="text" id="setName" placeholder="应用名称（前端显示的品牌名）">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><label style="font-size:14px;color:#64748b">主题色</label><input type="color" id="setPrimary"></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><label style="font-size:14px;color:#8a94a6">主题色</label><input type="color" id="setPrimary"></div>
   <label class="chk"><input type="checkbox" id="setRequire"> <b>卡密开关</b>（开启后 App 需输入卡密才能使用）</label>
   <button onclick="saveUI()">保存UI设置</button>
 </div>
@@ -194,6 +237,7 @@ function doLogin(){
     })
     .catch(function(){ b.disabled=false; b.textContent='登 录'; alert('连接失败，请重试（免费服务首次访问可能需等待数十秒）'); });
 }
+function doLogout(){ TOK=''; document.getElementById('login').style.display='flex'; document.getElementById('panel').style.display='none'; document.getElementById('pwd').value=''; }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));document.getElementById('p-'+t.dataset.p).classList.add('on');});
 function load(){
  api('/api/data').then(d=>{if(!d.ok)return;
@@ -202,6 +246,7 @@ function load(){
    document.getElementById('sVisit').textContent=v.length;
    document.getElementById('sIp').textContent=ips.length;
    document.getElementById('sVer').textContent=d.version.v||'-';
+   var tv=document.getElementById('tbVer'); if(tv) tv.textContent='v'+(d.version.v||'-');
    document.getElementById('apkInfo').textContent=d.version.apkUrl?('最新：'+d.version.v+'　'+(d.version.apkUrl||'')):'尚未上传APK';
    var vp=document.getElementById('vPush'); if(vp) vp.checked = d.version.push!==false;
    document.getElementById('tCheck').innerHTML='<tr><th>时间</th><th>姓名</th><th>IP</th><th>备注</th></tr>'+c.map(x=>'<tr><td>'+x.time+'</td><td>'+x.name+'</td><td>'+x.ip+'</td><td>'+(x.note||'')+'</td></tr>').join('');
