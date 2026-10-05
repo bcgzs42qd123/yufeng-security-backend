@@ -30,7 +30,7 @@ if (!fs.existsSync(APK_DIR)) fs.mkdirSync(APK_DIR, { recursive: true });
 
 let DATA = {
   checkins: [], visits: [],
-  version: { v: '1.0', note: '', apkUrl: '', time: 0, push: true },
+  version: { v: '2.0', note: '', apkUrl: '', time: 0, push: true },
   cardkeys: [],
   announcement: { title: '', content: '', on: false, updatedAt: 0 },
   settings: { appName: '誉峰保安刷题', primary: '#3b5bff', requireCard: false }
